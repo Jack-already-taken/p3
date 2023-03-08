@@ -21,7 +21,7 @@ struct __attribute__((__packed__)) Superblock
 	uint16_t rootIndex;
 	uint16_t dataIndex;
 	uint16_t dataCount;
-	uint16_t FATLen;
+	uint8_t FATLen;
 	int8_t padding[4079];
 };
 

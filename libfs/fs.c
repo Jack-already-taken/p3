@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "disk.h"
 #include "fs.h"
@@ -32,10 +33,23 @@ struct __attribute__((__packed__)) RootEntry
 	int8_t padding[10];
 };
 
+/* phase 3 */
+struct FileDescriptor
+{
+	uint16_t dataStartIndex;
+	uint32_t offset;
+};
+
+// Flag to determine if fs is mounted or not
+bool mount = false;
+
 struct Superblock superblock;
 uint16_t *FAT;
-struct RootEntry *rootEntries;
+struct RootEntry rootEntries[FS_FILE_MAX_COUNT];
 int FATLength;
+
+/* Phase 3 */
+struct FileDescriptor fdTable[FS_OPEN_MAX_COUNT];
 
 int fs_mount(const char *diskname)
 {
@@ -76,16 +90,17 @@ int fs_mount(const char *diskname)
 	}
 
 	// initialize FAT
-	FATLength = superblock.FATLen * FAT_PER_BLOCK;
-	FAT = malloc(sizeof(uint16_t) * FATLength);
-	for (unsigned int i = 0; i < FATLen; i++) 
+	FATLength = superblock.dataCount;
+	FAT = malloc(sizeof(uint16_t) * superblock.FATLen * FAT_PER_BLOCK);
+	for (unsigned int i = 0; i < superblock.FATLen; i++)
 	{
 		block_read(i+1, &FAT[i * FAT_PER_BLOCK]);
 	}
 
 	// read root block
-	rootEntries = malloc(sizeof(struct RootEntry) * FS_FILE_MAX_COUNT);
 	block_read(superblock.rootIndex, rootEntries);
+
+	mount = true;
 
 	return 0;
 }
@@ -94,7 +109,7 @@ int fs_umount(void)
 {
 	/* TODO: Phase 1 */
 	// Check if disk was mounted
-	if (FAT == NULL || rootEntries == NULL)
+	if (!mount)
 	{
 		return -1;
 	}
@@ -113,6 +128,11 @@ int fs_umount(void)
 int fs_info(void)
 {
 	/* TODO: Phase 1 */
+	if (!mount)
+	{
+		return -1;
+	}
+
 	int freeFAT = 0, freeRootEntries = 0;
 	for (int i = 0; i < FATLength; i++) 
 	{

@@ -18,9 +18,9 @@ struct __attribute__((__packed__)) Superblock
 {
 	uint64_t signature;
 	uint16_t blockCount;
-	uint16_t rootIndex;
-	uint16_t dataIndex;
-	uint16_t dataCount;
+	uint16_t rootDir_Index;
+	uint16_t dataB_startIndex;
+	uint16_t dataBCount;
 	uint16_t FATLen;
 	int8_t padding[4079];
 };
@@ -78,19 +78,19 @@ int fs_mount(const char *diskname)
 	}
 
 	// check the validity of FAT and Root blocks
-	uint32_t FATLen = (uint32_t)superblock.dataCount * 2 / BLOCK_SIZE;
-	if ((uint32_t)superblock.dataCount * 2 % BLOCK_SIZE != 0)
+	uint32_t FATLen = (uint32_t)superblock.dataBCount * 2 / BLOCK_SIZE;
+	if ((uint32_t)superblock.dataBCount * 2 % BLOCK_SIZE != 0)
 	{
 		FATLen += 1;
 	}
-	if (FATLen != superblock.FATLen || FATLen + 1 != superblock.rootIndex 
-	|| superblock.rootIndex + 1 != superblock.dataIndex)
+	if (FATLen != superblock.FATLen || FATLen + 1 != superblock.rootDir_Index 
+	|| superblock.rootDir_Index + 1 != superblock.dataB_startIndex)
 	{
 		return -1;
 	}
 
 	// initialize FAT
-	FATLength = superblock.dataCount;
+	FATLength = superblock.dataBCount;
 	FAT = malloc(sizeof(uint16_t) * superblock.FATLen * FAT_PER_BLOCK);
 	for (unsigned int i = 0; i < superblock.FATLen; i++)
 	{
@@ -98,7 +98,7 @@ int fs_mount(const char *diskname)
 	}
 
 	// read root block
-	block_read(superblock.rootIndex, rootEntries);
+	block_read(superblock.rootDir_Index, rootEntries);
 
 	mount = true;
 
@@ -149,8 +149,8 @@ int fs_info(void)
 		}
 	}
 	printf("FS Info:\ntotal_blk_count=%d\nfat_blk_count=%d\nrdir_blk=%d\ndata_blk=%d\ndata_blk_count=%d\n"
-	"fat_free_ratio=%d/%d\nrdir_free_ratio=%d/%d\n", superblock.blockCount, superblock.FATLen, superblock.rootIndex,
-	superblock.dataIndex, superblock.dataCount, freeFAT, FATLength, freeRootEntries, FS_FILE_MAX_COUNT);
+	"fat_free_ratio=%d/%d\nrdir_free_ratio=%d/%d\n", superblock.blockCount, superblock.FATLen, superblock.rootDir_Index,
+	superblock.dataB_startIndex, superblock.dataBCount, freeFAT, FATLength, freeRootEntries, FS_FILE_MAX_COUNT);
 
 	return 0;
 }
@@ -158,12 +158,45 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
+	if(filename >= FS_FILENAME_LEN || filename == NULL) {
+		return -1;
+	}
+	//checking FS is currently mounted
+	if(superblock == NULL || block_disk_count == FS_FILE_MAX_COUNT) {
+		return -1;
+	}
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(!strcmp(rootEntries[i].filename, filename)) {
+			return -1;
+		}
+	}
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(rootEntries[i].filename == NULL) {
+			strcpy(rootEntries->filename, filename);
+			rootEntries->fileSize = 0;
+			rootEntries->dataStartIndex = FAT_EOC;
+		}
+	}
+
 	return (int) (*filename);
 }
 
 int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
+	//if file @filename is currently open return -1
+	if(filename >= FS_FILENAME_LEN || filename == NULL) {
+		return -1;
+	}
+	//checking FS is currently mounted
+	if(superblock == NULL) { // how can I check the FS is mounted or not.
+		return -1;
+	}
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(!strcmp(rootEntries[i].filename, filename)) {
+
+		}
+	}
 	return (int) (*filename);
 }
 

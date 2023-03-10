@@ -7,7 +7,6 @@
 #include "disk.h"
 #include "fs.h"
 
-#define ROOT_ENTRY_SIZE 128
 #define FAT_PER_BLOCK 2048
 #define FAT_EOC 0xffff
 
@@ -21,13 +20,8 @@ struct __attribute__((__packed__)) Superblock
 	uint16_t rootIndex;
 	uint16_t dataIndex;
 	uint16_t dataCount;
-	uint8_t FATLen;
+	uint16_t FATLen;
 	int8_t padding[4079];
-};
-
-struct __attribute__((__packed__)) FATBlock
-{
-	uint16_t index[2048];
 };
 
 struct __attribute__((__packed__)) RootEntry
@@ -36,11 +30,6 @@ struct __attribute__((__packed__)) RootEntry
 	uint32_t fileSize;
 	uint16_t dataStartIndex;
 	int8_t padding[10];
-};
-
-struct __attribute__((__packed__)) RootBlock
-{
-	struct RootEntry entries[128];
 };
 
 struct Superblock superblock;
@@ -89,10 +78,14 @@ int fs_mount(const char *diskname)
 	// initialize FAT
 	FATLength = superblock.FATLen * FAT_PER_BLOCK;
 	FAT = malloc(sizeof(uint16_t) * FATLength);
-	FAT[0] = FAT_EOC;
+	for (unsigned int i = 0; i < FATLen; i++) 
+	{
+		block_read(i+1, &FAT[i * FAT_PER_BLOCK]);
+	}
 
 	// read root block
-	rootEntries = malloc(sizeof(struct RootEntry) * ROOT_ENTRY_SIZE);
+	rootEntries = malloc(sizeof(struct RootEntry) * FS_FILE_MAX_COUNT);
+	block_read(superblock.rootIndex, rootEntries);
 
 	return 0;
 }
@@ -129,7 +122,7 @@ int fs_info(void)
 		}
 	}
 
-	for (int i = 0; i < ROOT_ENTRY_SIZE; i++)
+	for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
 	{
 		if (strlen(rootEntries[i].filename) == 0) {
 			freeRootEntries++;
@@ -137,7 +130,7 @@ int fs_info(void)
 	}
 	printf("FS Info:\ntotal_blk_count=%d\nfat_blk_count=%d\nrdir_blk=%d\ndata_blk=%d\ndata_blk_count=%d\n"
 	"fat_free_ratio=%d/%d\nrdir_free_ratio=%d/%d\n", superblock.blockCount, superblock.FATLen, superblock.rootIndex,
-	superblock.dataIndex, superblock.dataCount, freeFAT, FATLength, freeRootEntries, ROOT_ENTRY_SIZE);
+	superblock.dataIndex, superblock.dataCount, freeFAT, FATLength, freeRootEntries, FS_FILE_MAX_COUNT);
 
 	return 0;
 }

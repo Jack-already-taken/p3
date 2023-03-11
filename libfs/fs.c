@@ -158,51 +158,78 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
-	if(filename >= FS_FILENAME_LEN || filename == NULL) {
+	if (filename >= FS_FILENAME_LEN || filename == NULL)
+	{
 		return -1;
 	}
-	//checking FS is currently mounted
-	if(superblock == NULL || block_disk_count == FS_FILE_MAX_COUNT) {
+	// checking FS is currently mounted
+	if (superblock == NULL || block_disk_count == FS_FILE_MAX_COUNT)
+	{
 		return -1;
 	}
-	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-		if(!strcmp(rootEntries[i].filename, filename)) {
+	int i = 0;
+	while (!rootEntries[i].filename)
+	{
+		if (!strcmp(rootEntries[i].filename, filename))
+		{
 			return -1;
 		}
-	}
-	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-		if(rootEntries[i].filename == NULL) {
-			strcpy(rootEntries->filename, filename);
+		if (rootEntries[i].filename == NULL)
+		{
+			strcpy(rootEntries->filename, filename);//need to check
 			rootEntries->fileSize = 0;
 			rootEntries->dataStartIndex = FAT_EOC;
+			return 0;
 		}
+		i++;
 	}
 
-	return (int) (*filename);
+	return (int)(*filename);
 }
 
 int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
-	//if file @filename is currently open return -1
-	if(filename >= FS_FILENAME_LEN || filename == NULL) {
+	// if file @filename is currently open return -1
+	if (filename >= FS_FILENAME_LEN || filename == NULL)
+	{
 		return -1;
 	}
-	//checking FS is currently mounted
-	if(superblock == NULL) { // how can I check the FS is mounted or not.
+	// checking FS is currently mounted
+	if (superblock == NULL)
+	{ // how can I check the FS is mounted or not.
 		return -1;
 	}
-	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-		if(!strcmp(rootEntries[i].filename, filename)) {
-
+	int i = 0;
+	while (!rootEntries[i].filename)
+	{
+		if (!strcmp(rootEntries[i].filename, filename))
+		{
+			uint16_t fatIndex = rootEntries[i].dataStartIndex;
+			while (FAT[fatIndex] != FAT_EOC)
+			{
+				uint16_t tempfatIndex = 0;
+				tempfatIndex = FAT[fatIndex];
+				FAT[fatIndex] = 0;
+				fatIndex = tempfatIndex;
+			}
+			FAT[fatIndex] = 0;
+			return 0;
 		}
+		i++;
 	}
-	return (int) (*filename);
+	return (int)(*filename);
 }
 
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
+	int i = 0;
+	while (rootEntries[i].filename != NULL)
+	{
+		printf("%s/n", rootEntries[i].filename);
+		i++;
+	}
 	return 0;
 }
 

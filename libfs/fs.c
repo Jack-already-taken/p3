@@ -170,12 +170,17 @@ int fs_create(const char *filename)
 		return -1;
 	}
 	int i = 0;
-	while (!rootEntries[i].filename)
+	while(i < FS_FILE_MAX_COUNT)
 	{
 		if (!strcmp(rootEntries[i].filename, filename))
 		{
 			return -1;
 		}
+		i++;
+	}
+	i = 0;
+	while (i < FS_FILE_MAX_COUNT)
+	{
 		if (rootEntries[i].filename == NULL)
 		{
 			strcpy(rootEntries->filename, filename);//need to check

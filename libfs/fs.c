@@ -165,7 +165,11 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
-	if (!mount || filename >= FS_FILENAME_LEN || filename == NULL || block_disk_count == FS_FILE_MAX_COUNT)
+	// fixed the conditions:
+	// added strlen() to filename when checking length
+	// block_disk_count is not used for checking maximum number of files, therefore deleted
+	// checking of number of files is implemented in the last part of the function
+	if (!mount || strlen(filename) >= FS_FILENAME_LEN || filename == NULL)
 	{
 		return -1;
 	}
@@ -184,8 +188,6 @@ int fs_create(const char *filename)
 	while (i < FS_FILE_MAX_COUNT)
 	{
 		// cannot use filename == NULL to check for \0, use strlen instead
-		// since strlen count the number of characters before it read \0, reading a filename filled with \0
-		// will result in a length 0
 		if (strlen(rootEntries[i].filename) == 0)  
 		{
 			// -> is not the way to access elements in an array, change all of them to index
@@ -196,21 +198,38 @@ int fs_create(const char *filename)
 		}
 		i++;
 	}
-	return 0;
+
+	// Reaching this line means no free space in rootEntries can be found
+	// Therefore meaning that there already exists 128 files
+	return -1;
 }
+
 
 int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
-	// if file @filename is currently open return -1
-	if (!mount || filename >= FS_FILENAME_LEN || filename == NULL)
+	// same checking as fs_create
+	if (!mount || strlen(filename) >= FS_FILENAME_LEN || filename == NULL)
 	{
 		return -1;
 	}
-	int i = 0;
-	while (!rootEntries[i].filename)
+
+	// Implements checking if file to be deleted is currently open. This depends on datastrucure for fd
+	// fdTable stores the open file's index in rootEntries in its entryIndex field
+	// therefore, use entryIndex to access the filename of each open file in rootEntries and check if
+	// it is the same as the filename of the file to be deleted
+	for (int i = 0; i < FS_OPEN_MAX_COUNT; i++)
 	{
-		if (!strcmp(rootEntries[i].filename, filename))
+		if (strcmp(rootEntries[fdTable[i].entryIndex].filename, filename) == 0)
+		{
+			return -1;
+		}
+	}
+
+	int i = 0;
+	while (i < FS_FILE_MAX_COUNT) // replace filename null check with index i's checking
+	{
+		if (strcmp(rootEntries[i].filename, filename) == 0) // strcmp returns 0 if two strings match
 		{
 			uint16_t fatIndex = rootEntries[i].dataStartIndex;
 			while (FAT[fatIndex] != FAT_EOC)
@@ -221,15 +240,17 @@ int fs_delete(const char *filename)
 				fatIndex = tempfatIndex;
 			}
 			FAT[fatIndex] = 0;
+
+			// also reset the filename to show a space is free in rootEntries
+			// setting first character to \0 is sufficient
+			rootEntries[i].filename[0] = '\0';
 			return 0;
-		}
-		else //filename is not on rootEntries
-		{
-			return -1;
 		}
 		i++;
 	}
-	return (int)(*filename);
+
+	// file name is not in rootEntries
+	return -1;
 }
 
 int fs_ls(void)

@@ -38,7 +38,7 @@ struct __attribute__((__packed__)) RootEntry
 struct FileDescriptor
 {
 	int entryIndex;
-	int offset;
+	uint32_t offset;
 };
 
 // Flag to determine if fs is mounted or not
@@ -50,8 +50,23 @@ struct RootEntry rootEntries[FS_FILE_MAX_COUNT];
 int FATLength;
 
 /* Phase 3 */
+/**
+ * fdTable is the datastructure used to keep track of fd, which are integers returned by fs_open, used by fs_close, fs_read, fs_write, etc.
+ * fd denotes a file that is currently open for reading and writing
+ * you may find in FileDescriptor struct that there's only fields for entryIndex and offset, but none for fd
+ * this is because fd is represented by the index to the FileDescriptor within fdTable
+ * 
+ * Example usage:
+ * if we have the fd, and want to know where is the file associated with fd located in rootEntries, using:
+ * 
+ * fdTable[fd].entryIndex
+ * 
+ * will give us the index in rootEntries that contains the information about the file
+ * say if we wnat to access the name of the file associated with fd, we would use:
+ * 
+ * rootEntries[fdTable[fd].entryIndex].filename
+*/
 struct FileDescriptor fdTable[FS_OPEN_MAX_COUNT];
-int openFileCount = 0;
 
 int fs_mount(const char *diskname)
 {
@@ -256,12 +271,6 @@ int fs_delete(const char *filename)
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
-	int i = 0;
-	while (rootEntries[i].filename != NULL)
-	{
-		printf("%s/n", rootEntries[i].filename);
-		i++;
-	}
 	return 0;
 }
 
@@ -269,7 +278,7 @@ int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
 	// return -1 if disk is not mounted and filename is invalid
-	if (!mount || strlen(filename) == 0 || strlen(filename) > FS_FILENAME_LEN-1 || openFileCount == FS_OPEN_MAX_COUNT)
+	if (!mount || strlen(filename) == 0 || strlen(filename) >= FS_FILENAME_LEN)
 	{
 		return -1;
 	}
@@ -289,7 +298,7 @@ int fs_open(const char *filename)
 
 	// Find a valid fd
 	int fd = 0;
-	for (; fd < FS_OPEN_MAX_COUNT && fdTable[fd].entryIndex != -1; fd++);
+	for (; fd < FS_OPEN_MAX_COUNT && fdTable[fd].entryIndex != FD_EMPTY; fd++);
 	if (fd == FS_OPEN_MAX_COUNT)
 	{
 		return -1;
@@ -348,6 +357,16 @@ int fs_lseek(int fd, size_t offset)
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+	// Check if fd is valid and if disk is mounted
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
+	{
+		return -1;
+	}
+	
+	// Find block location of offset to start
+	uint32_t offset = fdTable[fd].offset;
+
+	
 	return fd + (*(int*)(buf)) + count;
 }
 

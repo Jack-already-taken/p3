@@ -10,6 +10,7 @@
 
 #define FAT_PER_BLOCK 2048
 #define FAT_EOC 0xffff
+#define FD_EMPTY -1
 
 /* TODO: Phase 1 */
 
@@ -36,8 +37,8 @@ struct __attribute__((__packed__)) RootEntry
 /* phase 3 */
 struct FileDescriptor
 {
-	uint16_t dataStartIndex;
-	uint32_t offset;
+	int entryIndex;
+	int offset;
 };
 
 // Flag to determine if fs is mounted or not
@@ -50,6 +51,7 @@ int FATLength;
 
 /* Phase 3 */
 struct FileDescriptor fdTable[FS_OPEN_MAX_COUNT];
+int openFileCount = 0;
 
 int fs_mount(const char *diskname)
 {
@@ -100,6 +102,12 @@ int fs_mount(const char *diskname)
 	// read root block
 	block_read(superblock.rootDir_Index, rootEntries);
 
+	// initialize fdTable so that all entries are available
+	for (int i = 0; i < FS_OPEN_MAX_COUNT; i++)
+	{
+		fdTable[i].entryIndex = FD_EMPTY;
+	}
+
 	mount = true;
 
 	return 0;
@@ -121,7 +129,6 @@ int fs_umount(void)
 	}
 	
 	free(FAT);
-	free(rootEntries);
 	return 0;
 }
 
@@ -158,103 +165,136 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
-	if (filename >= FS_FILENAME_LEN || filename == NULL)
-	{
+	/*
+	if(filename >= FS_FILENAME_LEN || filename == NULL) {
 		return -1;
 	}
-	// checking FS is currently mounted
-	if (superblock == NULL || block_disk_count == FS_FILE_MAX_COUNT)
-	{
+	//checking FS is currently mounted
+	if(!mount) {
 		return -1;
 	}
-	int i = 0;
-	while (!rootEntries[i].filename)
-	{
-		if (!strcmp(rootEntries[i].filename, filename))
-		{
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(!strcmp(rootEntries[i].filename, filename)) {
 			return -1;
 		}
-		if (rootEntries[i].filename == NULL)
-		{
-			strcpy(rootEntries->filename, filename);//need to check
+	}
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(rootEntries[i].filename == NULL) {
+			strcpy(rootEntries->filename, filename);
 			rootEntries->fileSize = 0;
 			rootEntries->dataStartIndex = FAT_EOC;
-			return 0;
 		}
-		i++;
 	}
+	*/
 
-	return (int)(*filename);
+	return (int) (*filename);
 }
 
 int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
-	// if file @filename is currently open return -1
-	if (filename >= FS_FILENAME_LEN || filename == NULL)
-	{
+	//if file @filename is currently open return -1
+	/*
+	if(filename >= FS_FILENAME_LEN || filename == NULL) {
 		return -1;
 	}
-	// checking FS is currently mounted
-	if (superblock == NULL)
-	{ // how can I check the FS is mounted or not.
+	//checking FS is currently mounted
+	if(!mount) { // how can I check the FS is mounted or not.
 		return -1;
 	}
-	int i = 0;
-	while (!rootEntries[i].filename)
-	{
-		if (!strcmp(rootEntries[i].filename, filename))
-		{
-			uint16_t fatIndex = rootEntries[i].dataStartIndex;
-			while (FAT[fatIndex] != FAT_EOC)
-			{
-				uint16_t tempfatIndex = 0;
-				tempfatIndex = FAT[fatIndex];
-				FAT[fatIndex] = 0;
-				fatIndex = tempfatIndex;
-			}
-			FAT[fatIndex] = 0;
-			return 0;
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if(!strcmp(rootEntries[i].filename, filename)) {
+
 		}
-		i++;
 	}
-	return (int)(*filename);
+	*/
+	return (int) (*filename);
 }
 
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
-	int i = 0;
-	while (rootEntries[i].filename != NULL)
-	{
-		printf("%s/n", rootEntries[i].filename);
-		i++;
-	}
 	return 0;
 }
 
 int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
-	return (int) (*filename);
+	// return -1 if disk is not mounted and filename is invalid
+	if (!mount || strlen(filename) == 0 || strlen(filename) > FS_FILENAME_LEN-1 || openFileCount == FS_OPEN_MAX_COUNT)
+	{
+		return -1;
+	}
+
+	// Find filename in root directory
+	int fileIndex = 0;
+	while (fileIndex < FS_FILE_MAX_COUNT && strcmp(rootEntries[fileIndex].filename, filename) != 0)
+	{
+		fileIndex++;
+	}
+	
+	// Condition for if file not found in root directory
+	if (fileIndex == FS_FILE_MAX_COUNT)
+	{
+		return -1;
+	}
+
+	// Find a valid fd
+	int fd = 0;
+	for (; fd < FS_OPEN_MAX_COUNT && fdTable[fd].entryIndex != -1; fd++);
+	if (fd == FS_OPEN_MAX_COUNT)
+	{
+		return -1;
+	}
+	fdTable[fd].entryIndex = fileIndex;
+	fdTable[fd].offset = 0;
+	
+	return fd;
 }
 
 int fs_close(int fd)
 {
 	/* TODO: Phase 3 */
-	return fd;
+	// Check if fd is valid and if disk is mounted
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
+	{
+		return -1;
+	}
+
+	fdTable[fd].entryIndex = FD_EMPTY;
+
+	return 0;
 }
 
 int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
-	return fd;
+	// Check if fd is valid and if disk is mounted
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
+	{
+		return -1;
+	}
+
+	return rootEntries[fdTable[fd].entryIndex].fileSize;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
-	return fd + offset;
+	// Check if fd is valid and if disk is mounted
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
+	{
+		return -1;
+	}
+
+	// Check if new offset is greater than current file size
+	if (offset >= rootEntries[fdTable[fd].entryIndex].fileSize)
+	{
+		return -1;
+	}
+
+	rootEntries[fdTable[fd].entryIndex].fileSize = offset;
+	return 0;
 }
 
 int fs_write(int fd, void *buf, size_t count)

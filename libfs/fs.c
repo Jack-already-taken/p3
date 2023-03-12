@@ -169,6 +169,7 @@ int fs_create(const char *filename)
 	{
 		return -1;
 	}
+
 	int i = 0;
 	while(i < FS_FILE_MAX_COUNT)
 	{
@@ -178,20 +179,24 @@ int fs_create(const char *filename)
 		}
 		i++;
 	}
+
 	i = 0;
 	while (i < FS_FILE_MAX_COUNT)
 	{
-		if (rootEntries[i].filename == NULL)
+		// cannot use filename == NULL to check for \0, use strlen instead
+		// since strlen count the number of characters before it read \0, reading a filename filled with \0
+		// will result in a length 0
+		if (strlen(rootEntries[i].filename) == 0)  
 		{
-			strcpy(rootEntries->filename, filename);//need to check
-			rootEntries->fileSize = 0;
-			rootEntries->dataStartIndex = FAT_EOC;
+			// -> is not the way to access elements in an array, change all of them to index
+			strcpy(rootEntries[i].filename, filename);
+			rootEntries[i].fileSize = 0;
+			rootEntries[i].dataStartIndex = FAT_EOC;
 			return 0;
 		}
 		i++;
 	}
-
-	return (int)(*filename);
+	return 0;
 }
 
 int fs_delete(const char *filename)

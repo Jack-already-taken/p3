@@ -271,6 +271,14 @@ int fs_delete(const char *filename)
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
+	int i = 0;
+	while (i < FS_FILE_MAX_COUNT)
+	{
+		//maybe need a loop for filename[]
+		if(rootEntries[i].filename[0] != '/0')
+			printf("%s/n", rootEntries[i].filename);
+		i++;
+	}
 	return 0;
 }
 

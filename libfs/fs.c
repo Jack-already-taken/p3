@@ -165,12 +165,7 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
-	if (filename >= FS_FILENAME_LEN || filename == NULL || block_disk_count == FS_FILE_MAX_COUNT)
-	{
-		return -1;
-	}
-	// checking FS is currently mounted
-	if (superblock == NULL)
+	if (!mount || filename >= FS_FILENAME_LEN || filename == NULL || block_disk_count == FS_FILE_MAX_COUNT)
 	{
 		return -1;
 	}
@@ -198,13 +193,8 @@ int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
 	// if file @filename is currently open return -1
-	if (filename >= FS_FILENAME_LEN || filename == NULL)
+	if (!mount || filename >= FS_FILENAME_LEN || filename == NULL)
 	{
-		return -1;
-	}
-	// checking FS is currently mounted
-	if (superblock == NULL)
-	{ // how can I check the FS is mounted or not.
 		return -1;
 	}
 	int i = 0;

@@ -68,6 +68,59 @@ int FATLength;
 */
 struct FileDescriptor fdTable[FS_OPEN_MAX_COUNT];
 
+/**
+ * Find last FAT block of a file
+ * return FAT block index, or FAT_EOC if file length is 0
+*/
+int findFATEnd(int fd)
+{
+	int FATEnd = rootEntries[fdTable[fd].entryIndex].dataStartIndex;
+	if (FATEnd == FAT_EOC)
+	{
+		return FAT_EOC;
+	}
+	for (; FAT[FATEnd] != FAT_EOC; FATEnd = FAT[FATEnd]);
+	return FATEnd;
+}
+
+int findFATStart(int fd, long *offset)
+{
+	int FATStart = rootEntries[fdTable[fd].entryIndex].dataStartIndex;
+	while (*offset >= BLOCK_SIZE)
+	{
+		*offset -= BLOCK_SIZE;
+		FATStart = FAT[FATStart];
+	}
+	return FATStart;
+}
+
+/**
+ * Allocate a new block for file pointed to by fd
+ * return FAT index of new space if successful
+ * return -1 if no space to allocate
+*/
+int falloc(int fd)
+{
+	// Find index for the new block
+	int i = 0;
+	for (; i < FATLength && FAT[i] != 0; i++);
+	if (i == FATLength)
+	{
+		return -1;
+	}
+	FAT[i] = FAT_EOC;
+	int FATEnd = findFATEnd(fd);
+	if (FATEnd == FAT_EOC)
+	{
+		rootEntries[fdTable[fd].entryIndex].dataStartIndex = i;
+	}
+	else
+	{
+		FAT[FATEnd] = i;
+	}
+	return i;
+}
+
 int fs_mount(const char *diskname)
 {
 	/* TODO: Phase 1 */
@@ -271,12 +324,16 @@ int fs_delete(const char *filename)
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
+	if (!mount)
+	{
+		return -1;
+	}
 	int i = 0;
 	while (i < FS_FILE_MAX_COUNT)
 	{
 		//maybe need a loop for filename[]
-		if(rootEntries[i].filename[0] != '/0')
-			printf("%s/n", rootEntries[i].filename);
+		if (strlen(rootEntries[i].filename) != 0)
+			printf("file: %s, size: %d, data_blk: %d/n", rootEntries[i].filename, rootEntries[i].fileSize, rootEntries[i].dataStartIndex);
 		i++;
 	}
 	return 0;
@@ -370,12 +427,66 @@ int fs_write(int fd, void *buf, size_t count)
 	{
 		return -1;
 	}
-	
+
+	long remainingByte = count;
+	char bounce[BLOCK_SIZE];
 	// Find block location of offset to start
-	uint32_t offset = fdTable[fd].offset;
+	long offset = fdTable[fd].offset;
+	int FATIndex = findFATStart(fd, &offset);
+	block_read(FATIndex, bounce);
+
+	// Case 1: read first block
+	long readByte;
+	if (BLOCK_SIZE - offset - 1 < remainingByte)
+	{
+		readByte = BLOCK_SIZE - offset - 1;
+	}
+	else {
+		readByte = count;
+	}
+	remainingByte -= readByte;
+	memcpy(bounce + offset, buf, readByte);
+	block_write(FATIndex, bounce);
+	
+	// Case 2: read intermediate full blocks
+	while (remainingByte > BLOCK_SIZE)
+	{
+		if (FAT[FATIndex] == FAT_EOC)
+		{
+			int result = falloc(fd);
+			if (result == -1)
+			{
+				fdTable[fd].offset = fdTable[fd].offset + (count - remainingByte);
+				if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
+				{
+					rootEntries[fdTable[fd].entryIndex].fileSize = fdTable[fd].offset;
+				}
+				return count - remainingByte;
+			}
+		}
+		FATIndex = FAT[FATIndex];
+		block_write(FATIndex, buf + (count - remainingByte));
+		remainingByte -= BLOCK_SIZE;
+	}
+
+	// Case 3: read last block
+	if (remainingByte > 0)
+	{
+		int result = falloc(fd);
+		if (result == -1)
+		{
+			fdTable[fd].offset = fdTable[fd].offset + (count - remainingByte);
+
+		}
+		FATIndex = FAT[FATIndex];
+		block_read(FATIndex, bounce);
+		memcpy(bounce,  buf + (count - remainingByte), remainingByte);
+		block_write(FATIndex, bounce);
+		remainingByte -= remainingByte;
+	}
 
 	
-	return fd + (*(int*)(buf)) + count;
+	return count - remainingByte;
 }
 
 int fs_read(int fd, void *buf, size_t count)

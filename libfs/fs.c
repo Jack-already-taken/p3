@@ -423,7 +423,7 @@ int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
 	// Check if fd is valid and if disk is mounted
-	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL)
 	{
 		return -1;
 	}
@@ -456,6 +456,7 @@ int fs_write(int fd, void *buf, size_t count)
 			int result = falloc(fd);
 			if (result == -1)
 			{
+				//need to fix??
 				fdTable[fd].offset = fdTable[fd].offset + (count - remainingByte);
 				if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
 				{
@@ -492,6 +493,54 @@ int fs_write(int fd, void *buf, size_t count)
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL)
+	{
+		return -1;
+	}
+	
+	long remainingByte = count;
+	char bounce[BLOCK_SIZE];
+	// Find block location of offset to start
+	long offset = fdTable[fd].offset;
+	int FATIndex = findFATStart(fd, &offset);
+	block_read(FATIndex, bounce);
+	long readByte = 0;
+
+	// case 1: starting in the middle of a block but not more than a block
+	if(BLOCK_SIZE - offset >= remainingByte)
+	{
+		memcpy(buf, bounce + offset, count);
+		fdTable[fd].offset = fdTable[fd].offset + BLOCK_SIZE - offset;
+	}
+	else if(BLOCK_SIZE - offset < remainingByte)
+	{
+		memcpy(buf, bounce + offset, BLOCK_SIZE - offset);
+		FATIndex = FAT[FATIndex];
+		remainingByte = remainingByte - (BLOCK_SIZE - offset);
+		readByte = BLOCK_SIZE - offset;
+
+	}
+	// Case 2: read whole block
+	while(remainingByte > BLOCK_SIZE)
+	{
+		block_read(FATIndex, bounce);
+		memcpy(buf + readByte, bounce, BLOCK_SIZE);
+		FATIndex = FAT[FATIndex];
+		remainingByte = remainingByte - BLOCK_SIZE;
+		readByte += BLOCK_SIZE;
+	}
+
+	// Case 3: start the begining of a block and ends 
+	if(remainingByte > 0) //
+	{
+		block_read(FATIndex, bounce);
+		memcpy(buf + readByte, bounce, remainingByte);
+		readByte += remainingByte;
+
+		fdTable[fd].offset = fdTable[fd].offset + count;
+	}
+
+	// file size and actual file offset. 
 	return fd + (*(int*)(buf)) + count;
 }
 

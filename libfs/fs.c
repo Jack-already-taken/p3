@@ -424,7 +424,6 @@ int fs_lseek(int fd, size_t offset)
 	}
 
 	fdTable[fd].offset = offset;
-	fprintf(stderr,"seek location %d\n", fdTable[fd].offset);
 	return 0;
 }
 

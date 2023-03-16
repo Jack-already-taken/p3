@@ -102,7 +102,7 @@ int findFATStart(int fd, long *offset)
 int falloc(int fd)
 {
 	// Find index for the new block
-	int i = 0;
+	int i = 1;
 	for (; i < FATLength && FAT[i] != 0; i++);
 	if (i == FATLength)
 	{
@@ -418,12 +418,13 @@ int fs_lseek(int fd, size_t offset)
 	}
 
 	// Check if new offset is greater than current file size
-	if (offset >= rootEntries[fdTable[fd].entryIndex].fileSize)
+	if (offset > rootEntries[fdTable[fd].entryIndex].fileSize)
 	{
 		return -1;
 	}
 
 	fdTable[fd].offset = offset;
+	fprintf(stderr,"seek location %d\n", fdTable[fd].offset);
 	return 0;
 }
 
@@ -436,7 +437,10 @@ int fs_write(int fd, void *buf, size_t count)
 	{
 		return -1;
 	}
-
+	if(count == 0)
+	{
+		return 0;mak
+	}
 	long remainingByte = count;
 	char bounce[BLOCK_SIZE];
 	// Find block location of offset to start
@@ -546,21 +550,21 @@ int fs_read(int fd, void *buf, size_t count)
 	readByte = remainingByte;
 
 	//first read
-	if(readByte == 0) {
-		block_read(superblock.dataB_startIndex + FATIndex, bounce);
-		// the first read block is not the end of file but reading ends in a block
-		if(remainingByte < (BLOCK_SIZE - offset)) {
-			memcpy(buf, bounce + offset, remainingByte);
-			fdTable[fd].offset += readByte;
-			return readByte;
-		}
-		// read until the end of the first block
-		else {
-			memcpy(buf, bounce + offset, (BLOCK_SIZE - offset)); 
-			remainingByte = remainingByte - (BLOCK_SIZE - offset);
-			FATIndex = FAT[FATIndex];
-		}
+	
+	block_read(superblock.dataB_startIndex + FATIndex, bounce);
+	// the first read block is not the end of file but reading ends in a block
+	if(remainingByte < (BLOCK_SIZE - offset)) {
+		memcpy(buf, bounce + offset, remainingByte);
+		fdTable[fd].offset += readByte;
+		return readByte;
 	}
+	// read until the end of the first block
+	else {
+		memcpy(buf, bounce + offset, (BLOCK_SIZE - offset)); 
+		remainingByte = remainingByte - (BLOCK_SIZE - offset);
+		FATIndex = FAT[FATIndex];
+	}
+	
 	while (remainingByte > BLOCK_SIZE) {
 		// read whole block
 		block_read(superblock.dataB_startIndex + FATIndex, buf + (readByte - remainingByte));

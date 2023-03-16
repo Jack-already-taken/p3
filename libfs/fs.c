@@ -423,7 +423,7 @@ int fs_lseek(int fd, size_t offset)
 		return -1;
 	}
 
-	rootEntries[fdTable[fd].entryIndex].fileSize = offset;
+	fdTable[fd].offset = offset;
 	return 0;
 }
 
@@ -574,5 +574,6 @@ int fs_read(int fd, void *buf, size_t count)
 	}
 
 	// file size and actual file offset. 
+	fdTable[fd].offset += readByte;
 	return readByte;
 }

@@ -189,14 +189,23 @@ int fs_umount(void)
 	{
 		return -1;
 	}
+	// Copy the FAT and Root directory back to the original disk
+	for (unsigned int i = 0; i < superblock.FATLen; i++)
+	{
+		block_write(i+1, &FAT[i * FAT_PER_BLOCK]);
+	}
+
+	block_write(superblock.rootDir_Index, rootEntries);
+	
 
 	// try to close the disk file
 	if (block_disk_close() == -1) 
 	{
 		return -1;
 	}
-	
+
 	free(FAT);
+	mount = false;
 	return 0;
 }
 
@@ -245,7 +254,7 @@ int fs_create(const char *filename)
 	int i = 0;
 	while(i < FS_FILE_MAX_COUNT)
 	{
-		if (!strcmp(rootEntries[i].filename, filename))
+		if (strcmp(rootEntries[i].filename, filename) == 0)
 		{
 			return -1;
 		}
@@ -300,14 +309,17 @@ int fs_delete(const char *filename)
 		if (strcmp(rootEntries[i].filename, filename) == 0) // strcmp returns 0 if two strings match
 		{
 			uint16_t fatIndex = rootEntries[i].dataStartIndex;
-			while (FAT[fatIndex] != FAT_EOC)
+			if (fatIndex != FAT_EOC)
 			{
-				uint16_t tempfatIndex = 0;
-				tempfatIndex = FAT[fatIndex];
+				while (FAT[fatIndex] != FAT_EOC)
+				{
+					uint16_t tempfatIndex = 0;
+					tempfatIndex = FAT[fatIndex];
+					FAT[fatIndex] = 0;
+					fatIndex = tempfatIndex;
+				}
 				FAT[fatIndex] = 0;
-				fatIndex = tempfatIndex;
 			}
-			FAT[fatIndex] = 0;
 
 			// also reset the filename to show a space is free in rootEntries
 			// setting first character to \0 is sufficient
@@ -329,11 +341,12 @@ int fs_ls(void)
 		return -1;
 	}
 	int i = 0;
+	printf("FS Ls:\n");
 	while (i < FS_FILE_MAX_COUNT)
 	{
 		//maybe need a loop for filename[]
 		if (strlen(rootEntries[i].filename) != 0)
-			printf("file: %s, size: %d, data_blk: %d/n", rootEntries[i].filename, rootEntries[i].fileSize, rootEntries[i].dataStartIndex);
+			printf("file: %s, size: %d, data_blk: %d\n", rootEntries[i].filename, rootEntries[i].fileSize, rootEntries[i].dataStartIndex);
 		i++;
 	}
 	return 0;

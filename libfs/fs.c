@@ -241,11 +241,6 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {
-	/* TODO: Phase 2 */
-	// fixed the conditions:
-	// added strlen() to filename when checking length
-	// block_disk_count is not used for checking maximum number of files, therefore deleted
-	// checking of number of files is implemented in the last part of the function
 	if (!mount || strlen(filename) >= FS_FILENAME_LEN || filename == NULL)
 	{
 		return -1;
@@ -434,6 +429,7 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(int fd, void *buf, size_t count)
 {
+	
 	/* TODO: Phase 4 */
 	// Check if fd is valid and if disk is mounted
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL)
@@ -461,7 +457,7 @@ int fs_write(int fd, void *buf, size_t count)
 		}
 		FATIndex = rootEntries[fdTable[fd].entryIndex].dataStartIndex;
 	}
-	block_read(FATIndex, bounce);
+	block_read(superblock.dataB_startIndex + FATIndex, bounce);
 
 	// Case 1: write first block
 	long readByte;
@@ -475,7 +471,7 @@ int fs_write(int fd, void *buf, size_t count)
 	}
 	remainingByte -= readByte;
 	memcpy(bounce + offset, buf, readByte);
-	block_write(FATIndex, bounce);
+	block_write(superblock.dataB_startIndex + FATIndex, bounce);
 	
 	// Case 2: write intermediate full blocks
 	while (remainingByte > BLOCK_SIZE)
@@ -495,7 +491,7 @@ int fs_write(int fd, void *buf, size_t count)
 			}
 		}
 		FATIndex = FAT[FATIndex];
-		block_write(FATIndex, buf + (count - remainingByte));
+		block_write(superblock.dataB_startIndex + FATIndex, buf + (count - remainingByte));
 		remainingByte -= BLOCK_SIZE;
 	}
 
@@ -517,9 +513,9 @@ int fs_write(int fd, void *buf, size_t count)
 			}
 		}
 		FATIndex = FAT[FATIndex];
-		block_read(FATIndex, bounce);
+		block_read(superblock.dataB_startIndex + FATIndex, bounce);
 		memcpy(bounce,  buf + (count - remainingByte), remainingByte);
-		block_write(FATIndex, bounce);
+		block_write(superblock.dataB_startIndex + FATIndex, bounce);
 		remainingByte -= remainingByte;
 	}
 
@@ -534,54 +530,49 @@ int fs_write(int fd, void *buf, size_t count)
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
-	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL)
-	{
+	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL) {
 		return -1;
 	}
 	
 	long remainingByte = count;
-	char bounce[BLOCK_SIZE];
-	// Find block location of offset to start
-	long offset = fdTable[fd].offset;
-	int FATIndex = findFATStart(fd, &offset);
-	block_read(FATIndex, bounce);
 	long readByte = 0;
+	char bounce[BLOCK_SIZE];
+	long offset = fdTable[fd].offset; // starting offset from the first reading
+	int FATIndex = findFATStart(fd, &offset);
 
-	// case 1: starting in the middle of a block but not more than a block
-	if(BLOCK_SIZE - offset >= remainingByte)
-	{
-		memcpy(buf, bounce + offset, count);
-		fdTable[fd].offset = fdTable[fd].offset + BLOCK_SIZE - offset;
+	if (rootEntries[fdTable[fd].entryIndex].fileSize - fdTable[fd].offset < remainingByte) {
+		remainingByte = rootEntries[fdTable[fd].entryIndex].fileSize - fdTable[fd].offset;
 	}
-	else if(BLOCK_SIZE - offset < remainingByte)
-	{
-		memcpy(buf, bounce + offset, BLOCK_SIZE - offset);
-		FATIndex = FAT[FATIndex];
-		remainingByte = remainingByte - (BLOCK_SIZE - offset);
-		readByte = BLOCK_SIZE - offset;
+	readByte = remainingByte;
 
+	//first read
+	if(readByte == 0) {
+		block_read(superblock.dataB_startIndex + FATIndex, bounce);
+		// the first read block is not the end of file but reading ends in a block
+		if(remainingByte < (BLOCK_SIZE - offset)) {
+			memcpy(buf, bounce + offset, remainingByte);
+			fdTable[fd].offset += readByte;
+			return readByte;
+		}
+		// read until the end of the first block
+		else {
+			memcpy(buf, bounce + offset, (BLOCK_SIZE - offset)); 
+			remainingByte = remainingByte - (BLOCK_SIZE - offset);
+			FATIndex = FAT[FATIndex];
+		}
 	}
-	// Case 2: read whole block
-	while(remainingByte > BLOCK_SIZE)
-	{
-		block_read(FATIndex, bounce);
-		memcpy(buf + readByte, bounce, BLOCK_SIZE);
-		FATIndex = FAT[FATIndex];
+	while (remainingByte > BLOCK_SIZE) {
+		// read whole block
+		block_read(superblock.dataB_startIndex + FATIndex, buf + (readByte - remainingByte));
 		remainingByte = remainingByte - BLOCK_SIZE;
-		readByte += BLOCK_SIZE;
+		FATIndex = FAT[FATIndex];
 	}
-
-	// Case 3: start the begining of a block and ends 
-	if(remainingByte > 0) //
-	{
-		block_read(FATIndex, bounce);
-		memcpy(buf + readByte, bounce, remainingByte);
-		readByte += remainingByte;
-
-		fdTable[fd].offset = fdTable[fd].offset + count;
+	// read end of block 
+	if(remainingByte > 0) {
+		block_read(superblock.dataB_startIndex + FATIndex, bounce);
+		memcpy(buf + (readByte - remainingByte), bounce, remainingByte);
 	}
 
 	// file size and actual file offset. 
-	return fd + (*(int*)(buf)) + count;
+	return readByte;
 }
-

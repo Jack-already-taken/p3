@@ -446,22 +446,38 @@ int fs_write(int fd, void *buf, size_t count)
 	// Find block location of offset to start
 	long offset = fdTable[fd].offset;
 	int FATIndex = findFATStart(fd, &offset);
+	if (FATIndex == FAT_EOC)
+	{
+		int result = falloc(fd);
+		if (result == -1)
+		{
+			//need to fix??
+			fdTable[fd].offset += count - remainingByte;
+			if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
+			{
+				rootEntries[fdTable[fd].entryIndex].fileSize = fdTable[fd].offset;
+			}
+			return count - remainingByte;
+		}
+		FATIndex = rootEntries[fdTable[fd].entryIndex].dataStartIndex;
+	}
 	block_read(FATIndex, bounce);
 
-	// Case 1: read first block
+	// Case 1: write first block
 	long readByte;
 	if (BLOCK_SIZE - offset - 1 < remainingByte)
 	{
 		readByte = BLOCK_SIZE - offset - 1;
 	}
-	else {
+	else 
+	{
 		readByte = count;
 	}
 	remainingByte -= readByte;
 	memcpy(bounce + offset, buf, readByte);
 	block_write(FATIndex, bounce);
 	
-	// Case 2: read intermediate full blocks
+	// Case 2: write intermediate full blocks
 	while (remainingByte > BLOCK_SIZE)
 	{
 		if (FAT[FATIndex] == FAT_EOC)
@@ -470,7 +486,7 @@ int fs_write(int fd, void *buf, size_t count)
 			if (result == -1)
 			{
 				//need to fix??
-				fdTable[fd].offset = fdTable[fd].offset + (count - remainingByte);
+				fdTable[fd].offset += count - remainingByte;
 				if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
 				{
 					rootEntries[fdTable[fd].entryIndex].fileSize = fdTable[fd].offset;
@@ -483,14 +499,22 @@ int fs_write(int fd, void *buf, size_t count)
 		remainingByte -= BLOCK_SIZE;
 	}
 
-	// Case 3: read last block
+	// Case 3: write last block
 	if (remainingByte > 0)
 	{
-		int result = falloc(fd);
-		if (result == -1)
+		if (FAT[FATIndex] == FAT_EOC)
 		{
-			fdTable[fd].offset = fdTable[fd].offset + (count - remainingByte);
-
+			int result = falloc(fd);
+			if (result == -1)
+			{
+				//need to fix??
+				fdTable[fd].offset += count - remainingByte;
+				if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
+				{
+					rootEntries[fdTable[fd].entryIndex].fileSize = fdTable[fd].offset;
+				}
+				return count - remainingByte;
+			}
 		}
 		FATIndex = FAT[FATIndex];
 		block_read(FATIndex, bounce);
@@ -499,7 +523,11 @@ int fs_write(int fd, void *buf, size_t count)
 		remainingByte -= remainingByte;
 	}
 
-	
+	fdTable[fd].offset += count - remainingByte;
+	if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
+	{
+		rootEntries[fdTable[fd].entryIndex].fileSize = fdTable[fd].offset;
+	}
 	return count - remainingByte;
 }
 

@@ -2,7 +2,8 @@
 programs := \
 			simple_writer.x \
 			simple_reader.x \
-			test_fs.x
+			test_fs.x \
+			writer2.x
 
 # File-system library
 FSLIB := libfs

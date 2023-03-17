@@ -1,26 +1,28 @@
 # Target library
 lib := libfs.a
-
-## TODO: Phase 1
 objs    := disk.o fs.o
 CC      := gcc
-CFLAGS  := -Wall -Wextra -Werror
-CFLAGS  += -g
+CFLAGS  := -Wall -Wextra -Werror -MMD
+LDFLAGS := -lc
 
-## TODO: Phase 1
 ifneq ($(V),1)
 Q = @
 endif
 
-# Dep tracking *must* be below the 'all' rule
-deps := $(patsubst %.o, %.d, $(objs))
--include $(deps)
-DEPFLAGS = -MMD -MF $(@:.o=.d)
+ifneq ($(D),1)
+CFLAGS	+= -O2
+else
+CFLAGS	+= -g
+endif
 
 all: $(lib)
 
-libfs.a: $(objs) 
-	$(Q)ar rcs $@ $^
+deps := $(patsubst %.o, %.d, $(objs))
+-include $(deps)
+
+$(lib): $(objs)
+	@echo "CC $@"
+	$(Q) ar rcs $(LDFLAGS) $@ $^
 
 %.o: %.c
 	@echo "CC $@"

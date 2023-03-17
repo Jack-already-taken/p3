@@ -226,10 +226,16 @@ int fs_info(void)
 			freeRootEntries++;
 		}
 	}
-	printf("FS Info:\ntotal_blk_count=%d\nfat_blk_count=%d\nrdir_blk=%d\ndata_blk=%d\ndata_blk_count=%d\n"
-	"fat_free_ratio=%d/%d\nrdir_free_ratio=%d/%d\n", superblock.blockCount, superblock.FATLen, superblock.rootDir_Index,
-	superblock.dataB_startIndex, superblock.dataBCount, freeFAT, FATLength, freeRootEntries, FS_FILE_MAX_COUNT);
-
+	
+	printf("FS Info:\n");
+	printf("total_blk_count=%d\n", superblock.blockCount);
+	printf("fat_blk_count=%d\n", superblock.FATLen);
+	printf("rdir_blk=%d\n", superblock.rootDir_Index);
+	printf("data_blk=%d\n", superblock.dataB_startIndex);
+	printf("data_blk_count=%d\n", superblock.dataBCount);
+	printf("fat_free_ratio=%d/%d\n", freeFAT, FATLength);
+	printf("rdir_free_ratio=%d/%d\n", freeRootEntries, FS_FILE_MAX_COUNT);
+	
 	return 0;
 }
 

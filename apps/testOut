@@ -1,0 +1,5 @@
+FS Ls:
+file: test_fs.c, size: 9230, data_blk: 1
+file: simple_reader.c, size: 988, data_blk: 4
+file: Makefile, size: 1382, data_blk: 5
+file: test_fs.x, size: 45888, data_blk: 6

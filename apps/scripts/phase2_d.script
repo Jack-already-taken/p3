@@ -1,0 +1,7 @@
+MOUNT
+DELETE	file_fs
+DELETE	file2
+CREATE	inTheMiddle
+DELETE	file6
+DELETE	another_one
+UMOUNT

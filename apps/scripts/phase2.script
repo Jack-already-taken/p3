@@ -1,0 +1,7 @@
+MOUNT
+CREATE	file_fs
+CREATE	file2
+CREATE	File5
+CREATE	file6
+CREATE	another_one
+UMOUNT

@@ -12,6 +12,8 @@
 #define FAT_EOC 0xffff
 #define FD_EMPTY -1
 
+/* TODO: Phase 1 */
+
 // packed attribute to keep the struct size stable
 struct __attribute__((__packed__)) Superblock
 {
@@ -32,6 +34,7 @@ struct __attribute__((__packed__)) RootEntry
 	int8_t padding[10];
 };
 
+/* phase 3 */
 struct FileDescriptor
 {
 	int entryIndex;
@@ -83,7 +86,7 @@ int findFATEnd(int fd)
 int findFATStart(int fd, long *offset)
 {
 	int FATStart = rootEntries[fdTable[fd].entryIndex].dataStartIndex;
-	while (*offset >= BLOCK_SIZE)
+	while (*offset >= BLOCK_SIZE && FATStart != FAT_EOC)
 	{
 		*offset -= BLOCK_SIZE;
 		FATStart = FAT[FATStart];
@@ -120,6 +123,7 @@ int falloc(int fd)
 
 int fs_mount(const char *diskname)
 {
+	/* TODO: Phase 1 */
 	// open disk
 	int out = block_disk_open(diskname);
 	if (out == -1)
@@ -179,6 +183,7 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
+	/* TODO: Phase 1 */
 	// Check if disk was mounted
 	if (!mount)
 	{
@@ -206,6 +211,7 @@ int fs_umount(void)
 
 int fs_info(void)
 {
+	/* TODO: Phase 1 */
 	if (!mount)
 	{
 		return -1;
@@ -226,21 +232,20 @@ int fs_info(void)
 			freeRootEntries++;
 		}
 	}
-	
-	printf("FS Info:\n");
-	printf("total_blk_count=%d\n", superblock.blockCount);
-	printf("fat_blk_count=%d\n", superblock.FATLen);
-	printf("rdir_blk=%d\n", superblock.rootDir_Index);
-	printf("data_blk=%d\n", superblock.dataB_startIndex);
-	printf("data_blk_count=%d\n", superblock.dataBCount);
-	printf("fat_free_ratio=%d/%d\n", freeFAT, FATLength);
-	printf("rdir_free_ratio=%d/%d\n", freeRootEntries, FS_FILE_MAX_COUNT);
-	
+	printf("FS Info:\ntotal_blk_count=%d\nfat_blk_count=%d\nrdir_blk=%d\ndata_blk=%d\ndata_blk_count=%d\n"
+	"fat_free_ratio=%d/%d\nrdir_free_ratio=%d/%d\n", superblock.blockCount, superblock.FATLen, superblock.rootDir_Index,
+	superblock.dataB_startIndex, superblock.dataBCount, freeFAT, FATLength, freeRootEntries, FS_FILE_MAX_COUNT);
+
 	return 0;
 }
 
 int fs_create(const char *filename)
 {
+	/* TODO: Phase 2 */
+	// fixed the conditions:
+	// added strlen() to filename when checking length
+	// block_disk_count is not used for checking maximum number of files, therefore deleted
+	// checking of number of files is implemented in the last part of the function
 	if (!mount || strlen(filename) >= FS_FILENAME_LEN || filename == NULL)
 	{
 		return -1;
@@ -279,6 +284,7 @@ int fs_create(const char *filename)
 
 int fs_delete(const char *filename)
 {
+	/* TODO: Phase 2 */
 	// same checking as fs_create
 	if (!mount || strlen(filename) >= FS_FILENAME_LEN || filename == NULL)
 	{
@@ -329,6 +335,7 @@ int fs_delete(const char *filename)
 
 int fs_ls(void)
 {
+	/* TODO: Phase 2 */
 	if (!mount)
 	{
 		return -1;
@@ -347,6 +354,7 @@ int fs_ls(void)
 
 int fs_open(const char *filename)
 {
+	/* TODO: Phase 3 */
 	// return -1 if disk is not mounted and filename is invalid
 	if (!mount || strlen(filename) == 0 || strlen(filename) >= FS_FILENAME_LEN)
 	{
@@ -381,6 +389,7 @@ int fs_open(const char *filename)
 
 int fs_close(int fd)
 {
+	/* TODO: Phase 3 */
 	// Check if fd is valid and if disk is mounted
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
 	{
@@ -394,6 +403,7 @@ int fs_close(int fd)
 
 int fs_stat(int fd)
 {
+	/* TODO: Phase 3 */
 	// Check if fd is valid and if disk is mounted
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
 	{
@@ -405,6 +415,7 @@ int fs_stat(int fd)
 
 int fs_lseek(int fd, size_t offset)
 {
+	/* TODO: Phase 3 */
 	// Check if fd is valid and if disk is mounted
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY)
 	{
@@ -423,16 +434,20 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(int fd, void *buf, size_t count)
 {
+	/* TODO: Phase 4 */
 	// Check if fd is valid and if disk is mounted
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL)
 	{
 		return -1;
 	}
-	if(count == 0)
+
+	if (count == 0) 
 	{
 		return 0;
 	}
+
 	long remainingByte = count;
+	//printf("Remaining: %ld\n", remainingByte);
 	char bounce[BLOCK_SIZE];
 	// Find block location of offset to start
 	long offset = fdTable[fd].offset;
@@ -456,15 +471,16 @@ int fs_write(int fd, void *buf, size_t count)
 
 	// Case 1: write first block
 	long readByte;
-	if (BLOCK_SIZE - offset - 1 < remainingByte)
+	if (BLOCK_SIZE - offset < remainingByte)
 	{
-		readByte = BLOCK_SIZE - offset - 1;
+		readByte = BLOCK_SIZE - offset;
 	}
 	else 
 	{
 		readByte = count;
 	}
 	remainingByte -= readByte;
+	//printf("Remaining: %ld\n", remainingByte);
 	memcpy(bounce + offset, buf, readByte);
 	block_write(superblock.dataB_startIndex + FATIndex, bounce);
 	
@@ -476,6 +492,7 @@ int fs_write(int fd, void *buf, size_t count)
 			int result = falloc(fd);
 			if (result == -1)
 			{
+				//need to fix??
 				fdTable[fd].offset += count - remainingByte;
 				if (rootEntries[fdTable[fd].entryIndex].fileSize < fdTable[fd].offset)
 				{
@@ -487,6 +504,7 @@ int fs_write(int fd, void *buf, size_t count)
 		FATIndex = FAT[FATIndex];
 		block_write(superblock.dataB_startIndex + FATIndex, buf + (count - remainingByte));
 		remainingByte -= BLOCK_SIZE;
+		//printf("Remaining: %ld\n", remainingByte);
 	}
 
 	// Case 3: write last block
@@ -511,6 +529,7 @@ int fs_write(int fd, void *buf, size_t count)
 		memcpy(bounce,  buf + (count - remainingByte), remainingByte);
 		block_write(superblock.dataB_startIndex + FATIndex, bounce);
 		remainingByte -= remainingByte;
+		//printf("Remaining: %ld\n", remainingByte);
 	}
 
 	fdTable[fd].offset += count - remainingByte;
@@ -523,6 +542,7 @@ int fs_write(int fd, void *buf, size_t count)
 
 int fs_read(int fd, void *buf, size_t count)
 {
+	/* TODO: Phase 4 */
 	if (!mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || fdTable[fd].entryIndex == FD_EMPTY || buf == NULL) {
 		return -1;
 	}
@@ -538,8 +558,11 @@ int fs_read(int fd, void *buf, size_t count)
 	}
 	readByte = remainingByte;
 
+	if (readByte == 0) {
+		return 0;
+	}
+
 	//first read
-	
 	block_read(superblock.dataB_startIndex + FATIndex, bounce);
 	// the first read block is not the end of file but reading ends in a block
 	if(remainingByte < (BLOCK_SIZE - offset)) {
@@ -553,7 +576,6 @@ int fs_read(int fd, void *buf, size_t count)
 		remainingByte = remainingByte - (BLOCK_SIZE - offset);
 		FATIndex = FAT[FATIndex];
 	}
-	
 	while (remainingByte > BLOCK_SIZE) {
 		// read whole block
 		block_read(superblock.dataB_startIndex + FATIndex, buf + (readByte - remainingByte));
@@ -570,3 +592,4 @@ int fs_read(int fd, void *buf, size_t count)
 	fdTable[fd].offset += readByte;
 	return readByte;
 }
+
